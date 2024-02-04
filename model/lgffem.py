@@ -59,4 +59,4 @@ class LGFFEM(nn.Module):
                   self.h3(fusioned_features['P2']).squeeze(0,2,3),
                   self.h4(fusioned_features['P3']).squeeze(0,2,3)]
 
-        return torch.cat(head_l)
+        return torch.cat(head_l, dim=1)
