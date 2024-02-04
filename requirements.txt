@@ -1,0 +1,5 @@
+omegaconf
+pytorch_metric_learning
+timm
+torchinfo
+tqdm
