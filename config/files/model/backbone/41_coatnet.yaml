@@ -1,0 +1,5 @@
+BACKBONE:
+    MODEL_NAME: 'coatnet_3_rw_224.sw_in12k'
+    OUT_INDICES: [0, 1, 2, 3]
+NECK:
+    IN_CHANNELS: [192, 192, 384, 768]

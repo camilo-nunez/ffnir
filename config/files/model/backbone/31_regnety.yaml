@@ -1,0 +1,5 @@
+BACKBONE:
+    MODEL_NAME: 'regnety_320.tv2_in1k'
+    OUT_INDICES: [0, 1, 2, 3]
+NECK:
+    IN_CHANNELS: [32, 232, 696, 1392]

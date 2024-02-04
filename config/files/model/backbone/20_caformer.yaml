@@ -1,0 +1,5 @@
+BACKBONE:
+    MODEL_NAME: 'caformer_s18.sail_in22k_ft_in1k_384'
+    OUT_INDICES: [0, 1, 2, 3]
+NECK:
+    IN_CHANNELS: [64, 128, 320, 512]

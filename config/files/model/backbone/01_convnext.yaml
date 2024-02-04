@@ -1,0 +1,5 @@
+BACKBONE:
+    MODEL_NAME: 'convnext_base'
+    OUT_INDICES: [0, 1, 2, 3]
+NECK:
+    IN_CHANNELS: [128, 256, 512, 1024]

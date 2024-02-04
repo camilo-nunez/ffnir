@@ -1,0 +1,5 @@
+BACKBONE:
+    MODEL_NAME: 'convnext_tiny'
+    OUT_INDICES: [0, 1, 2, 3]
+NECK:
+    IN_CHANNELS: [96, 192, 384, 768]

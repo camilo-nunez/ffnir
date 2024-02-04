@@ -1,0 +1,5 @@
+BACKBONE:
+    MODEL_NAME: 'convnextv2_base.fcmae'
+    OUT_INDICES: [0, 1, 2, 3]
+NECK:
+    IN_CHANNELS: [128, 256, 512, 1024]
