@@ -93,7 +93,7 @@ class GlobalAggregator(nn.Module):
     
     def __init__(self,
                  channels,
-                 r = 4,
+                 r = 2,
                  downsample = False,
                  drop_path=0.,
                 ):
