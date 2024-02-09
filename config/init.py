@@ -8,7 +8,6 @@ class BACKBONE:
         
 @dataclass
 class NECK:
-#     MODEL_NAME: str = MISSING
     IN_CHANNELS: list[int] = MISSING
     NUM_CHANNELS: int = MISSING
     NUM_LAYERS: int = MISSING
