@@ -1,0 +1,3 @@
+NECK:
+    NUM_CHANNELS: 512
+    NUM_LAYERS: 3
