@@ -11,7 +11,7 @@ class DownsampleInput(nn.Module):
                  r = 2,
                 ):
         super().__init__()
-        inter_channels = int(in_channels*r)
+        inter_channels = int(in_channels/r)
         
         self.pwconv1 = nn.Conv2d(in_channels, inter_channels, kernel_size=1, bias=False)
         self.norm = nn.LayerNorm(inter_channels, eps=1e-6)
@@ -28,10 +28,12 @@ class DownsampleInput(nn.Module):
 
         return x
 
-## https://github.com/facebookresearch/ConvNeXt-V2/blob/main/models/utils.py
 class GRN(nn.Module):
-    """ GRN (Global Response Normalization) layer
-    """
+    ### Original code extracted from:
+    # Title: ConvNeXt V2 Official PyTorch Implementation
+    # Retrieved Date: feb-2024
+    # Availability: https://github.com/facebookresearch/ConvNeXt-V2/blob/main/models/utils.py
+    ###
     def __init__(self, dim):
         super().__init__()
         self.gamma = nn.Parameter(torch.zeros(1, dim, 1, 1))
@@ -52,7 +54,7 @@ class LocalAggregator(nn.Module):
                  drop_path=0.,
                 ):
         super().__init__()
-        inter_channels = int(channels*r)
+        inter_channels = int(channels/r)
         self.use_upsample = upsample
 
         self.alpha = nn.Parameter(torch.zeros(1))
@@ -98,7 +100,7 @@ class GlobalAggregator(nn.Module):
                  drop_path=0.,
                 ):
         super().__init__()
-        inter_channels = int(channels*r)
+        inter_channels = int(channels/r)
         self.use_downsample = downsample
 
         self.alpha = nn.Parameter(torch.zeros(1))
@@ -142,13 +144,21 @@ class GlobalAggregator(nn.Module):
     
 # Local-Global Feature Fusion Neck (LGFFN)
 class LGFFN(nn.Module):
+    ### Original code extracted from:
+    # Title: Yet Another EfficientDet Pytorch
+    # Retrieved Date: june-2023
+    # Availability: https://github.com/zylo117/Yet-Another-EfficientDet-Pytorch
+    ###
     
     def __init__(self, 
                  channels: int,
                  conv_channels: list[int],
-                 first_time: bool = False):
+                 first_time: bool = False,
+                 epsilon: float = 1e-4):
         
         super().__init__()
+        
+        self.epsilon = epsilon
 
         # Convs blocks
         ## Inner Nodes
@@ -184,10 +194,19 @@ class LGFFN(nn.Module):
             self.p3_down_channel = DownsampleInput(in_channels=conv_channels[2] , out_channels=channels)
             self.p2_down_channel = DownsampleInput(in_channels=conv_channels[1] , out_channels=channels)
             self.p1_down_channel = DownsampleInput(in_channels=conv_channels[0] , out_channels=channels)
-
+        
+        ## weight for each node operation
+        self.p3_1_weight = nn.Parameter(torch.ones(2))
+        self.p2_1_weight = nn.Parameter(torch.ones(2))
+        
+        self.p1_2_weight = nn.Parameter(torch.ones(2))
+        self.p2_2_weight = nn.Parameter(torch.ones(3))
+        self.p3_2_weight = nn.Parameter(torch.ones(3))
+        self.p4_2_weight = nn.Parameter(torch.ones(2))
+        
     def forward(self, inputs):
         """
-        illustration of a minimal CABiFPN unit
+        illustration of a LGFFN layer 
             P4_0 --------------------------> P4_2 -------->
                |-------------|                ↑
                              ↓                |
@@ -216,14 +235,24 @@ class LGFFN(nn.Module):
 
         ## Nodes
         ### Inner Nodes
-        p3_1 = self.p31_gca_p30(p3_0) + self.p31_lca_p40(p4_0)
-        p2_1 = self.p21_gca_p20(p2_0) + self.p21_lca_p31(p3_1)
+        weight = self.p3_1_weight / (torch.sum(self.p3_1_weight, dim=0) + self.epsilon)
+        p3_1 = weight[0]*self.p31_gca_p30(p3_0) + weight[1]*self.p31_lca_p40(p4_0)
+        
+        weight = self.p2_1_weight / (torch.sum(self.p2_1_weight, dim=0) + self.epsilon)
+        p2_1 = weight[0]*self.p21_gca_p20(p2_0) + weight[1]*self.p21_lca_p31(p3_1)
         
         ### Outer Nodes
-        p1_2 = self.p12_gca_p10(p1_0) + self.p12_lca_p21(p2_1)
-        p2_2 = self.p22_lca_p20(p2_0) + self.p22_lca_P21(p2_1) + self.p22_gca_p12(p1_2)
-        p3_2 = self.p32_lca_p30(p3_0) + self.p32_lca_P31(p3_1) + self.p32_gca_p22(p2_2)
-        p4_2 = self.p42_lca_p40(p4_0) + self.p42_gca_p32(p3_2)
+        weight = self.p1_2_weight / (torch.sum(self.p1_2_weight, dim=0) + self.epsilon)
+        p1_2 = weight[0]*self.p12_gca_p10(p1_0) + weight[1]*self.p12_lca_p21(p2_1)
+        
+        weight = self.p2_2_weight / (torch.sum(self.p2_2_weight, dim=0) + self.epsilon)
+        p2_2 = weight[0]*self.p22_lca_p20(p2_0) + weight[1]*self.p22_lca_P21(p2_1) + weight[2]*self.p22_gca_p12(p1_2)
+        
+        weight = self.p3_2_weight / (torch.sum(self.p3_2_weight, dim=0) + self.epsilon)
+        p3_2 = weight[0]*self.p32_lca_p30(p3_0) + weight[1]*self.p32_lca_P31(p3_1) + weight[2]*self.p32_gca_p22(p2_2)
+        
+        weight = self.p4_2_weight / (torch.sum(self.p4_2_weight, dim=0) + self.epsilon)
+        p4_2 = weight[0]*self.p42_lca_p40(p4_0) + weight[1]*self.p42_gca_p32(p3_2)
         
         features = [p1_2, p2_2, p3_2, p4_2]
 
