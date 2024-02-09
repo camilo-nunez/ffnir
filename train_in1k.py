@@ -23,11 +23,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
-## Customs classes
+## Restriction
+AVAILABLE_SIZES = [96, 224]
 
 def parse_option():
     parser = argparse.ArgumentParser(
-        'Thesis cnunezf training LGFFEM model over ImageNet-1k.', add_help=True)
+        'Thesis cnunezf training LGFFEM model over ImageNet-1k using SubCenterArcFaceLoss.', add_help=True)
     
     parser.add_argument('--cfg_model_backbone',
                         type=str,
@@ -50,54 +51,94 @@ def parse_option():
     
     parser.add_argument('--summary',
                         action='store_true',
-                        help="Display the summary of the model.")
+                        help="Display the summary of the model."
+                       )
     
     parser.add_argument('--num_epochs',
                         type=int,
-                        default=5,
-                        help='Default 5 epochs.')
+                        default=25,
+                        help='Default 25 epochs.'
+                       )
     parser.add_argument('--batch_size',
                         type=int,
-                        default=2)
+                        default=512,
+                        help='Default 512 epochs.'
+                       )
     
     parser.add_argument('--dataset_path',
                         type=str,
                         default='/thesis/classical/imagenet-1k', 
-                        help='Path to complete DATASET.')
+                        help='Path to complete DATASET.'
+                       )
     
     parser.add_argument('--lr', 
                         type=float, 
-                        default=1e-4,
-                        help='Learning rate used by the \'adamw\' optimizer. Default is 1e-3. For \'lion\' its recommend 2e-4.'
+                        default=1e-2,
+                        help='Learning rate used by the \'adamw\' optimizer. Default is 1e-2.'
                        )
     parser.add_argument('--wd', 
                         type=float, 
                         default=1e-5,
-                        help='Weight decay used by the \'adamw\' optimizer. Default is 1e-5. For \'lion\' its recommend 1e-2.'
+                        help='Weight decay used by the \'adamw\' optimizer. Default is 1e-5.'
                        )
     parser.add_argument('--optimizer', 
                         type=str, 
                         default='adamw',
-                        help='The optimizer to use. The available opts are: \'adamw\' or \'sdg\'. By default its \'adamw\' .'
+                        help='The optimizer to use. The available opts are: \'adamw\' or \'sgd\'. By default its \'adamw\'.'
                        )
     
     parser.add_argument('--amp',
                         action='store_true',
-                        help="Enable Automatic Mixed Precision train.")
+                        help="Enable Automatic Mixed Precision train."
+                       )
     
     parser.add_argument('--scheduler',
                         action='store_true',
-                        help="Use scheduler")
-    
+                        help="Use scheduler."
+                       )
+    parser.add_argument('--scheduler_eta_min', 
+                        type=float, 
+                        default=1e-4,
+                        help='Minimum learning rate. Default is 1e-4.',
+                       )
+
     parser.add_argument('--checkpoint',
                         type=str,
                         metavar="FILE",
                         default = None,
-                        help="Checkpoint filename.")
+                        help="Checkpoint filename.",
+                       )
     parser.add_argument('--checkpoint_path',
                         type=str,
                         default='/thesis/checkpoint', 
-                        help='Path to complete DATASET.')
+                        help='Path to complete DATASET.',
+                       )
+    
+    parser.add_argument('--new_train',
+                        action='store_true',
+                       )
+    
+    parser.add_argument('--loss_m', 
+                        type=float, 
+                        default=17.5,
+                        help='The angular margin penalty in degrees or factor \'m\' in the loss equation. Default is 17.5 degress (0.3 rad).',
+                       )
+    parser.add_argument('--loss_s', 
+                        type=int, 
+                        default=64,
+                        help='Scale factor or factor \'s\' in the loss equation. Default is 64.'
+                       )
+    parser.add_argument('--loss_sc', 
+                        type=int, 
+                        default=6,
+                        help='The number of sub centers per class. Default is 6.',
+                       )
+    
+    parser.add_argument('--img_shape', 
+                        type=int, 
+                        default=96,
+                        help=f'Image size for the transform \'RandomResizedCrop\'. The available size are: {AVAILABLE_SIZES}. Default is 96.',
+                       )
     
     args, unparsed = parser.parse_known_args()
     config = create_train_in1k_config(args)
@@ -113,10 +154,10 @@ if __name__ == '__main__':
     writer = SummaryWriter()
     
     # Check the principal exceptions
-    #
-    #
-    #
-    
+    if not torch.cuda.is_available(): raise Exception('This script is only available to run in GPU.')
+    if args.img_shape not in AVAILABLE_SIZES: raise Exception(f'The image size choose for the resize transform is not available. The available size are: {AVAILABLE_SIZES}')
+    if args.loss_m>20.1: raise Exception(f'The angular margin penalty must be less than 0.35rad (20.1 degrees) to avoid saturated values. Please refer to the main paper or CosFaceLoss paper.')
+
     # Create the backbone and neck model
     print(f'[+] Configuring base model with variables: {base_config.MODEL}')
     base_model = LGFFEM(base_config).to(device)
@@ -131,7 +172,7 @@ if __name__ == '__main__':
     
     train_transforms = v2.Compose([
                                     v2.ToImage(),
-                                    v2.RandomResizedCrop(size=(224, 224), antialias=True),
+                                    v2.RandomResizedCrop(size=(args.img_shape, args.img_shape), antialias=True),
                                     v2.RandomHorizontalFlip(p=0.5),
                                     v2.ToDtype(torch.float32, scale=True),
                                     v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -161,7 +202,7 @@ if __name__ == '__main__':
                                       weight_decay=args.wd)
         print(f'[++] Using AdamW optimizer. Configs: lr->{args.lr}, weight_decay->{args.wd}')
     elif args.optimizer == 'sgd':
-        optimizer = torch.optim.SGD(params, lr=args.lr, momentum=0.9, weight_decay=0.5)
+        optimizer = torch.optim.SGD(params, lr=args.lr, momentum=0.9, weight_decay=args.wd)
         print(f'[++] Using SGD optimizer.')
     else:
         raise Exception("The optimizer selected doesn't exist. The available optis are: \'adamw\' or \'sgd\'.") 
@@ -170,11 +211,6 @@ if __name__ == '__main__':
     end_epoch = args.num_epochs
     best_loss = 1e5
     global_steps = 0
-    
-    ## Scheduler
-    if args.scheduler:
-        print("[++] Using CosineAnnealingWarmRestarts")
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=3, T_mult=1, eta_min= 5e-3)
     
     ## Prepare Automatic Mixed Precision
     if args.amp:
@@ -185,19 +221,58 @@ if __name__ == '__main__':
     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     
     ## Prepare LOSS Metric
-    
     ### pytorch-metric-learning stuff ###
-    loss_func = losses.SubCenterArcFaceLoss(num_classes=1000, embedding_size=4*base_config.MODEL.NECK.NUM_CHANNELS).to(device)
+    loss_func = losses.SubCenterArcFaceLoss(num_classes=1000, embedding_size=4*base_config.MODEL.NECK.NUM_CHANNELS, margin=args.loss_m, scale=args.loss_m, sub_centers=args.loss_sc).to(device)
     loss_optimizer = torch.optim.AdamW(loss_func.parameters(), lr=1e-4)
-    print("[++] Using SubCenterArcFaceLoss")
+    print(f"[++] Using SubCenterArcFaceLoss. embedding_size->{4*base_config.MODEL.NECK.NUM_CHANNELS}, margin->{args.loss_m}, scale->{args.loss_m}, sub_centers->{args.loss_sc}")
+    
+    ## Display the summary of the net
+    if args.summary: summary(loss_func)  
     ### pytorch-metric-learning stuff ###
     
+    ## Load the checkpoint if is need it
+    if args.checkpoint:
+        print('[++] Loading checkpoint...')
+        checkpoint = torch.load(os.path.join(args.checkpoint))
+        
+        match_n = base_model.neck.load_state_dict(checkpoint['model_neck_state_dict'], strict = False)
+        print('[++] Loaded neck weights.',match_n)
+        match_h = base_model.head.load_state_dict(checkpoint['model_head_state_dict'], strict = False)
+        print('[++] Loaded head weights.',match_h)
+        
+        if not args.new_train:
+            match_loss = loss_func.load_state_dict(checkpoint['loss_state_dict'], strict = False)
+            print('[++] Loaded loss_func weights.',match_loss)
+
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            print('[++] Loaded optimizer.')
+            loss_optimizer.load_state_dict(checkpoint['loss_optimizer_state_dict'])
+            print('[++] Loaded loss_optimizer optimizer.')
+
+            best_loss = checkpoint['best_loss']
+            start_epoch = checkpoint['epoch'] + 1
+
+        print(f'[++] Ready. start_epoch: {start_epoch} - best_loss: {best_loss}')
+        
+    ## Scheduler
+    if args.scheduler:
+        print(f"[+] Using \'CosineAnnealingWarmRestarts\'. eta_min->{args.scheduler_eta_min}")
+        if args.checkpoint:
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=3, T_mult=1, eta_min=args.scheduler_eta_min, last_epoch=start_epoch)
+            scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            print('[++] Loaded scheduler.')
+        else:
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=3, T_mult=1, eta_min=args.scheduler_eta_min)
+        
+        
     # === General train variables ===
     print('[+] Ready !')
     
     # === Train the model ===
     print('[+] Starting training ...')
     start_t = datetime.now()
+    
+    base_model.train()
     
     for e, epoch in enumerate(range(start_epoch, end_epoch + 1)):
         loss_l = []
@@ -212,7 +287,6 @@ if __name__ == '__main__':
 
                 with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=use_amp):
                     embeddings = base_model(data)
-                    
                     loss = loss_func(embeddings, labels)
                     
                 scaler.scale(loss).backward()
@@ -230,7 +304,7 @@ if __name__ == '__main__':
                 loss_l.append(loss.detach().cpu())
                 loss_mean = np.mean(np.array(loss_l))
                 
-                description_s = 'Epoch: {}/{}. lr: {:1.8f} loss_mean: {:1.10f}'\
+                description_s = 'Epoch: {}/{}. lr: {:1.10f} loss_mean: {:1.10f}'\
                                    .format(epoch, end_epoch, current_lr, loss_mean)
                 
                 tepoch.set_description(description_s)
@@ -242,17 +316,17 @@ if __name__ == '__main__':
                 global_steps+=1
 
                 if args.scheduler:
-                    scheduler.step(e + i_data/len(tepoch))
+                    scheduler.step(e + batch_idx/len(tepoch))
 
         if loss_mean < best_loss:
             best_loss = loss_mean
 
-            torch.save({'model_state_dict': base_model.state_dict(),
+            torch.save({'model_neck_state_dict': base_model.neck.state_dict(),
+                        'model_head_state_dict': base_model.head.state_dict(),
                         'loss_state_dict': loss_func.state_dict(),
-                        'optimizer_state_dict': optimizer.state_dict() if args.amp else None,
-                        'loss_optimizer_state_dict': loss_optimizer.state_dict() if args.amp else None,
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'loss_optimizer_state_dict': loss_optimizer.state_dict(),
                         'scheduler_state_dict':scheduler.state_dict() if args.scheduler else None,
-                        'scaler_state_dict': scaler.state_dict(),
                         'epoch': epoch,
                         'best_loss': best_loss,
                         'fn_cfg_model_head': str(args.cfg_model_head), 
