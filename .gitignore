@@ -203,4 +203,4 @@ cython_debug/
 runs
 
 ## test notebooks
-ntbk_*
+ntbk_dev_*
