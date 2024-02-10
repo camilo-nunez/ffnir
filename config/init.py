@@ -40,3 +40,16 @@ def create_train_in1k_config(args):
     base_config.MODEL = OmegaConf.merge(base_config.MODEL, model_backbone_conf, model_neck_conf, model_head_conf)
 
     return base_config
+
+## CONFIG FOR TRAIN_IN1K.py
+def create_baseconfig_from_checkpoint(checkpoint: dict):
+ 
+    model_backbone_conf = OmegaConf.load(checkpoint['fn_cfg_model_backbone'])
+    model_neck_conf = OmegaConf.load(checkpoint['fn_cfg_model_neck'])
+    model_head_conf = OmegaConf.load(checkpoint['fn_cfg_model_head'])
+    
+    base_config = default_config()
+    
+    base_config.MODEL = OmegaConf.merge(base_config.MODEL, model_backbone_conf, model_neck_conf, model_head_conf)
+
+    return base_config
