@@ -117,6 +117,9 @@ def parse_option():
     parser.add_argument('--new_train',
                         action='store_true',
                        )
+    parser.add_argument('--new_lr',
+                        action='store_true',
+                       )
     
     parser.add_argument('--loss_m', 
                         type=float, 
@@ -243,11 +246,12 @@ if __name__ == '__main__':
         if not args.new_train:
             match_loss = loss_func.load_state_dict(checkpoint['loss_state_dict'], strict = False)
             print('[++] Loaded loss_func weights.',match_loss)
-
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            print('[++] Loaded optimizer.')
-            loss_optimizer.load_state_dict(checkpoint['loss_optimizer_state_dict'])
-            print('[++] Loaded loss_optimizer optimizer.')
+            
+            if not args.new_lr:
+                optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                print('[++] Loaded optimizer.')
+                loss_optimizer.load_state_dict(checkpoint['loss_optimizer_state_dict'])
+                print('[++] Loaded loss_optimizer optimizer.')
 
             best_loss = checkpoint['best_loss']
             start_epoch = checkpoint['epoch'] + 1
@@ -257,7 +261,7 @@ if __name__ == '__main__':
     ## Scheduler
     if args.scheduler:
         print(f"[+] Using \'CosineAnnealingWarmRestarts\'. eta_min->{args.scheduler_eta_min}")
-        if args.checkpoint:
+        if args.checkpoint and not args.new_lr:
             scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=3, T_mult=1, eta_min=args.scheduler_eta_min, last_epoch=start_epoch)
             scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
             print('[++] Loaded scheduler.')
