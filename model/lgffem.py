@@ -41,8 +41,7 @@ class MiniHead(nn.Module):
         self.fc_norm = nn.Linear(self._BASECONFIG.MODEL.NECK.NUM_CHANNELS, self._BASECONFIG.MODEL.NECK.NUM_CHANNELS)
         
     def forward(self, x):
-        
-        x = self.gem(x).squeeze(0,2,3)
+        x = self.gem(x).squeeze(2,3)
         x = self.bn(x)
         x = self.do(x)
         x = self.fc(x)
