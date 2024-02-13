@@ -223,15 +223,12 @@ if __name__ == '__main__':
         use_amp = False
     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     
-    ## Prepare LOSS Metric
-    ### pytorch-metric-learning stuff ###
+    ## Prepare Loss Metric
     loss_func = losses.SubCenterArcFaceLoss(num_classes=1000, embedding_size=4*base_config.MODEL.NECK.NUM_CHANNELS, margin=args.loss_m, scale=args.loss_m, sub_centers=args.loss_sc).to(device)
     loss_optimizer = torch.optim.AdamW(loss_func.parameters(), lr=1e-4)
     print(f"[++] Using SubCenterArcFaceLoss. embedding_size->{4*base_config.MODEL.NECK.NUM_CHANNELS}, margin->{args.loss_m}, scale->{args.loss_m}, sub_centers->{args.loss_sc}")
-    
-    ## Display the summary of the net
+    ### Display the summary of the loss_func net
     if args.summary: summary(loss_func)  
-    ### pytorch-metric-learning stuff ###
     
     ## Load the checkpoint if is need it
     if args.checkpoint:
@@ -261,15 +258,13 @@ if __name__ == '__main__':
     ## Scheduler
     if args.scheduler:
         print(f"[+] Using \'CosineAnnealingWarmRestarts\'. eta_min->{args.scheduler_eta_min}")
-        if args.checkpoint and not args.new_lr:
+        if args.checkpoint and not (args.new_lr or args.new_train):
             scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=3, T_mult=1, eta_min=args.scheduler_eta_min, last_epoch=start_epoch)
             scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
             print('[++] Loaded scheduler.')
         else:
             scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=3, T_mult=1, eta_min=args.scheduler_eta_min)
-        
-        
-    # === General train variables ===
+
     print('[+] Ready !')
     
     # === Train the model ===
@@ -304,7 +299,6 @@ if __name__ == '__main__':
                 else:
                     current_lr = optimizer.param_groups[0]['lr']
                 
-                
                 loss_l.append(loss.detach().cpu())
                 loss_mean = np.mean(np.array(loss_l))
                 
@@ -313,7 +307,7 @@ if __name__ == '__main__':
                 
                 tepoch.set_description(description_s)
                 
-                 ## to board
+                ## to board
                 writer.add_scalar('learning_rate', current_lr, global_steps)
                 writer.add_scalar('loss_mean', loss_mean, global_steps)
                 
