@@ -226,7 +226,7 @@ if __name__ == '__main__':
     ## Prepare Loss Metric
     loss_func = losses.SubCenterArcFaceLoss(num_classes=1000, embedding_size=4*base_config.MODEL.NECK.NUM_CHANNELS, margin=args.loss_m, scale=args.loss_m, sub_centers=args.loss_sc).to(device)
     loss_optimizer = torch.optim.AdamW(loss_func.parameters(), lr=1e-4)
-    print(f"[++] Using SubCenterArcFaceLoss. embedding_size->{4*base_config.MODEL.NECK.NUM_CHANNELS}, margin->{args.loss_m}, scale->{args.loss_m}, sub_centers->{args.loss_sc}")
+    print(f"[++] Using SubCenterArcFaceLoss. embedding_size->{4*base_config.MODEL.NECK.NUM_CHANNELS}, margin->{args.loss_m}, scale->{args.loss_s}, sub_centers->{args.loss_sc}")
     ### Display the summary of the loss_func net
     if args.summary: summary(loss_func)  
     
