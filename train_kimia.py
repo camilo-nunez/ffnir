@@ -100,7 +100,11 @@ def parse_option():
                         default=1e-4,
                         help='Minimum learning rate. Default is 1e-4.',
                        )
-    parser.add_argument('--T_mult', 
+    parser.add_argument('--scheduler_t_mult', 
+                        type=int, 
+                        default=1,
+                       )
+    parser.add_argument('--scheduler_t_0', 
                         type=int, 
                         default=1,
                        )
@@ -254,13 +258,13 @@ if __name__ == '__main__':
         
     ## Scheduler
     if args.scheduler:
-        print(f"[+] Using \'CosineAnnealingWarmRestarts\'. eta_min->{args.scheduler_eta_min}")
+        print(f"[+] Using \'CosineAnnealingWarmRestarts\'. T_0->{args.scheduler_t_0}; T_mult->{args.scheduler_t_mult}; eta_min->{args.scheduler_eta_min}")
         if args.checkpoint and not (args.new_lr or args.new_train):
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=3, T_mult=args.T_mult, eta_min=args.scheduler_eta_min, last_epoch=start_epoch)
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=args.scheduler_t_0, T_mult=args.scheduler_t_mult, eta_min=args.scheduler_eta_min, last_epoch=start_epoch)
             scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
             print('[++] Loaded scheduler.')
         else:
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=3, T_mult=args.T_mult, eta_min=args.scheduler_eta_min)
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=args.scheduler_t_0, T_mult=args.scheduler_t_mult, eta_min=args.scheduler_eta_min)
 
     print('[+] Ready !')
     
