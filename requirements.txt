@@ -3,3 +3,7 @@ pytorch_metric_learning
 timm
 torchinfo
 tqdm
+umap
+albumentations
+pathml
+grad-cam
