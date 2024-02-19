@@ -72,7 +72,7 @@ def parse_option():
     
     parser.add_argument('--lr', 
                         type=float, 
-                        default=1e-2,
+                        default=1e-4,
                         help='Learning rate used by the \'adamw\' optimizer. Default is 1e-2.'
                        )
     parser.add_argument('--wd', 
@@ -105,6 +105,24 @@ def parse_option():
                         default=1,
                        )
     parser.add_argument('--scheduler_t_0', 
+                        type=int, 
+                        default=1,
+                       )
+    
+    parser.add_argument('--loss_scheduler',
+                        action='store_true',
+                        help="Use scheduler."
+                       )
+    parser.add_argument('--loss_scheduler_eta_min', 
+                        type=float, 
+                        default=1e-4,
+                        help='Minimum learning rate. Default is 1e-4.',
+                       )
+    parser.add_argument('--loss_scheduler_t_mult', 
+                        type=int, 
+                        default=1,
+                       )
+    parser.add_argument('--loss_scheduler_t_0', 
                         type=int, 
                         default=1,
                        )
@@ -143,6 +161,12 @@ def parse_option():
                         default=6,
                         help='The number of sub centers per class. Default is 6.',
                        )
+    parser.add_argument('--loss_lr', 
+                        type=float, 
+                        default=1e-4,
+                        help='The angular margin penalty in degrees or factor \'m\' in the loss equation. Default is 17.5 degress (0.3 rad).',
+                       )
+    
     
     args, unparsed = parser.parse_known_args()
     config = create_train_in1k_config(args)
@@ -173,12 +197,12 @@ if __name__ == '__main__':
     print(f'[+] Loading KIMIA Path24C dataset...')
     print(f'[++] Using batch_size: {args.batch_size}')
     train_transforms = A.Compose([
-                                 A.Resize(224,224,p=1),
-                                 A.VerticalFlip(p=0.5), 
-                                 A.HorizontalFlip(p=0.5),
-                                 A.RandomRotate90(p=0.5),
+                                 A.Resize(224,224),
+                                 A.VerticalFlip(p=0.6), 
+                                 A.HorizontalFlip(p=0.6),
+                                 A.RandomRotate90(p=0.6),
                                  A.GaussianBlur(p=0.5),
-                                 A.MedianBlur(p=0.5, blur_limit=5),
+                                 A.MedianBlur(p=0.6, blur_limit=5),
                                  A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225],max_pixel_value=255.0),
                                  ToTensorV2()
                                 ])
@@ -203,7 +227,9 @@ if __name__ == '__main__':
     if args.optimizer == 'adamw':
         optimizer = torch.optim.AdamW(params,
                                       lr=args.lr,
-                                      weight_decay=args.wd)
+                                      weight_decay=args.wd,
+                                      amsgrad=True,
+                                      )
         print(f'[++] Using AdamW optimizer. Configs: lr->{args.lr}, weight_decay->{args.wd}')
     elif args.optimizer == 'sgd':
         optimizer = torch.optim.SGD(params, lr=args.lr, momentum=0.9, weight_decay=args.wd)
@@ -226,8 +252,8 @@ if __name__ == '__main__':
     
     ## Prepare Loss Metric
     loss_func = losses.SubCenterArcFaceLoss(num_classes=24, embedding_size=4*base_config.MODEL.NECK.NUM_CHANNELS, margin=args.loss_m, scale=args.loss_m, sub_centers=args.loss_sc).to(device)
-    loss_optimizer = torch.optim.AdamW(loss_func.parameters(), lr=1e-4)
-    print(f"[++] Using SubCenterArcFaceLoss. embedding_size->{4*base_config.MODEL.NECK.NUM_CHANNELS}, margin->{args.loss_m}, scale->{args.loss_s}, sub_centers->{args.loss_sc}")
+    loss_optimizer = torch.optim.AdamW(loss_func.parameters(), lr=args.loss_lr)
+    print(f"[++] Using SubCenterArcFaceLoss. embedding_size->{4*base_config.MODEL.NECK.NUM_CHANNELS}, margin->{args.loss_m}, scale->{args.loss_s}, sub_centers->{args.loss_sc}, lr->{args.loss_lr}")
     ### Display the summary of the loss_func net
     if args.summary: summary(loss_func)  
     
@@ -265,6 +291,15 @@ if __name__ == '__main__':
             print('[++] Loaded scheduler.')
         else:
             scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=args.scheduler_t_0, T_mult=args.scheduler_t_mult, eta_min=args.scheduler_eta_min)
+            
+    if args.loss_scheduler:
+        print(f"[+] Using loss \'CosineAnnealingWarmRestarts\'. T_0->{args.loss_scheduler_t_0}; T_mult->{args.loss_scheduler_t_mult}; eta_min->{args.loss_scheduler_eta_min}")
+#         if args.checkpoint and not (args.new_lr or args.new_train):
+#             scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(loss_optimizer, T_0=args.scheduler_t_0, T_mult=args.scheduler_t_mult, eta_min=args.scheduler_eta_min, last_epoch=start_epoch)
+#             scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+#             print('[++] Loaded scheduler.')
+#         else:
+        loss_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(loss_optimizer, T_0=args.loss_scheduler_t_0, T_mult=args.loss_scheduler_t_mult, eta_min=args.loss_scheduler_eta_min)
 
     print('[+] Ready !')
     
@@ -299,12 +334,17 @@ if __name__ == '__main__':
                     current_lr = scheduler.get_last_lr()[0]
                 else:
                     current_lr = optimizer.param_groups[0]['lr']
+                    
+                if args.loss_scheduler:
+                    current_loss_lr = loss_scheduler.get_last_lr()[0]
+                else:
+                    current_loss_lr = loss_optimizer.param_groups[0]['lr']
                 
                 loss_l.append(loss.detach().cpu())
                 loss_mean = np.mean(np.array(loss_l))
                 
-                description_s = 'Epoch: {}/{}. lr: {:1.10f} loss_mean: {:1.10f}'\
-                                   .format(epoch, end_epoch, current_lr, loss_mean)
+                description_s = 'Epoch: {}/{}. lr: {:1.10f} loss_lr: {:1.10f} loss_mean: {:1.10f}'\
+                                   .format(epoch, end_epoch, current_lr, current_loss_lr, loss_mean)
                 
                 tepoch.set_description(description_s)
                 
@@ -316,6 +356,9 @@ if __name__ == '__main__':
 
                 if args.scheduler:
                     scheduler.step(e + batch_idx/len(tepoch))
+                
+                if args.loss_scheduler:
+                    loss_scheduler.step(e + batch_idx/len(tepoch))
 
         if loss_mean < best_loss:
             best_loss = loss_mean
