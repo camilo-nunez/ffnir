@@ -52,3 +52,8 @@ Since we use the [`PanNukeDataModule`](https://pathml.readthedocs.io/en/latest/a
 To download this dataset, use the official website [https://tizhoosh.com/download-corner/kimia-path24c-dataset/](https://tizhoosh.com/download-corner/kimia-path24c-dataset/).
 
 ### Train files
+Actually, we use three different training files for the three datasets used: (I) `train_in1k.py`, `train_pannuke.py`, and `train_kimia.py`. The obligatory arguments available in the training files are:
+
+- `--cfg_model_backbone`: Path to the BACKBONE config file. Must be a YAML file. The available files are in the folder `config/files/model/backbone`. We used the config file `11_convnextv2.yaml` in our experiment.
+- `--cfg_model_neck`: Path to the NECK config file. Must be a YAML file. The available files are in the folder `config/files/model/neck`. We used the config file `02_neck_512_3.yaml` in our experiment.
+- `--cfg_model_head`: Path to the HEAD config file. Must be a YAML file. The available files are in the folder `config/files/model/head`. We used the config file `00_head_A.yaml` in our experiment.
