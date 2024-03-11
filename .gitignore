@@ -205,3 +205,6 @@ runs
 ## test notebooks
 ntbk_dev_*
 dev_README.md
+
+## matplotlib figures
+figures
