@@ -3,7 +3,8 @@ pytorch_metric_learning
 timm
 torchinfo
 tqdm
-umap
+umap-learn
 albumentations
-pathml
 grad-cam
+seaborn
+natsort
